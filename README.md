@@ -63,4 +63,4 @@ All extensions come from their upstream authors, unmodified. This repository add
 
 - **Subagent concurrency is fixed at 4** in pi-lite-subagent 0.2.2, the most tasks of one `parallel` call that run at once. That suits discrete GPUs serving several slots. Lemonade starts llama.cpp with one slot (`--parallel 1`), though, so on a single GPU such as Strix Halo the extra requests just queue on the server and evict each other's prompt cache. A setting for this is planned upstream.
 - **No subagents in plan mode.** pi-lite-subagent can't restrict which agent runs, so plan mode leaves `subagent` out to stay read-only.
-- **Two question tools while planning.** Plan mode has its own (`plan_mode_question`) alongside `ask_questions`.
+- **Two question tools.** Plan mode's `plan_mode_question` is declared in every request next to `ask_questions`, about 340 extra tokens; it only works while a plan is active. Plan mode keeps its tool list fixed on purpose, because changing tools mid-session would make llama.cpp reprocess the whole prompt.
