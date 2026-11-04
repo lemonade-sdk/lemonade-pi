@@ -44,6 +44,10 @@ if (-not (Test-Path $pi)) {
 
 $version = (& $pi --version | Select-Object -First 1).Trim()
 if ([version]($version -replace '[^0-9.].*$', '') -lt [version]"1.5") {
+  # `pi update --self` would upgrade the pi on PATH, which -Dir promises to leave alone.
+  if ($Dir) {
+    Write-Error "pi $version is too old; lemonade-pi needs 1.5 or newer. Run ``pi update``, then run this again."
+  }
   Say "Updating pi $version (lemonade-pi needs 1.5 or newer)"
   Invoke-Pi update --self
 }

@@ -15,6 +15,7 @@ usage() {
   echo "  --dir <path>  install into a self-contained pi agent directory instead of ~/.pi/agent"
 }
 
+own_dir=
 while [ $# -gt 0 ]; do
   case "$1" in
     --dir)
@@ -22,6 +23,7 @@ while [ $# -gt 0 ]; do
       mkdir -p "$2"
       PI_CODING_AGENT_DIR=$(cd "$2" && pwd)
       export PI_CODING_AGENT_DIR
+      own_dir=1
       shift 2
       ;;
     -h | --help) usage; exit 0 ;;
@@ -64,6 +66,11 @@ fi
 version=$("$pi" --version 2>/dev/null | head -n1)
 case "$version" in
   0.* | 1.[0-4] | 1.[0-4].*)
+    # `pi update --self` would upgrade the pi on PATH, which --dir promises to leave alone.
+    if [ -n "$own_dir" ]; then
+      echo "pi $version is too old; lemonade-pi needs 1.5 or newer. Run \`pi update\`, then run this again." >&2
+      exit 1
+    fi
     say "Updating pi $version (lemonade-pi needs 1.5 or newer)"
     "$pi" update --self
     ;;
