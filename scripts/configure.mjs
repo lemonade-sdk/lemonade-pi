@@ -51,6 +51,7 @@ seed(config("web-search.json"), target("web-search.json"));
 seed(config("pi-plan-mode.json"), target("pi-plan-mode.json"));
 seed(config("pi-todo-config.json"), target("pi-todo", "config.json"));
 configurePermissions();
+allowSkillReads();
 bindThinkingCycle();
 
 // Earlier releases allowed `subagent` without a prompt, so delegated agents,
@@ -73,6 +74,26 @@ function configurePermissions() {
   } else {
     console.log(`  kept ${file}`);
   }
+}
+
+// The model reads skills from this package's folder, which is outside any
+// workspace, so pi-ask-permission would ask before every skill it loads.
+function allowSkillReads() {
+  const file = target("extensions", "pi-ask-permission", "folders.json");
+  const { value, invalid } = readJson(file);
+  if (invalid) {
+    console.log(`  kept ${file} (not valid JSON); skills will ask before they're read`);
+    return;
+  }
+  const folders = value ?? { read: [], write: [] };
+  folders.read = Array.isArray(folders.read) ? folders.read : [];
+  if (folders.read.some((dir) => path.resolve(dir.replace(/^~(?=$|[\\/])/, home())) === path.resolve(packageDir))) {
+    console.log(`  kept ${file}`);
+    return;
+  }
+  folders.read.push(packageDir);
+  writeJson(file, folders);
+  console.log(`  ${value ? "updated" : "wrote"} ${file}: skills can be read without asking`);
 }
 
 // shift+tab cycles permission modes, as in Claude Code, so pi's thinking-level
@@ -101,4 +122,8 @@ function bindThinkingCycle() {
       console.log(`  warning: ${action} uses shift+tab, so shift+tab won't cycle permission modes`);
     }
   }
+}
+
+function home() {
+  return process.env.HOME ?? process.env.USERPROFILE ?? "";
 }
