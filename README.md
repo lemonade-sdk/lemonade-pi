@@ -58,5 +58,3 @@ All extensions come from their upstream authors, unmodified. This repository add
 - **Subagent concurrency is fixed at 4.** On one GPU, parallel children queue on the server and evict each other's prompt cache.
 - **No subagents in plan mode.** pi-lite-subagent can't restrict which agent runs, so plan mode leaves `subagent` out to stay read-only.
 - **Two question tools while planning.** Plan mode has its own (`plan_mode_question`) alongside `ask_questions`.
-
-sawan
