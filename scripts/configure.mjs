@@ -53,6 +53,7 @@ seed(config("pi-todo-config.json"), target("pi-todo", "config.json"));
 configurePermissions();
 allowSkillReads();
 bindThinkingCycle();
+checkPackageOrder();
 
 // Earlier releases allowed `subagent` without a prompt, so delegated agents,
 // which run in full mode, could act unapproved. A file still holding exactly
@@ -121,6 +122,23 @@ function bindThinkingCycle() {
     if ((Array.isArray(keys) ? keys : [keys]).includes("shift+tab")) {
       console.log(`  warning: ${action} uses shift+tab, so shift+tab won't cycle permission modes`);
     }
+  }
+}
+
+// pi runs tool_call hooks in package order, and `pi install` keeps an existing
+// package where it is. Plan mode must come first, or the permission prompt asks
+// about edits that plan mode is about to block.
+function checkPackageOrder() {
+  const packages = readJson(target("settings.json")).value?.packages ?? [];
+  const position = (name) =>
+    packages.findIndex((p) => (typeof p === "string" ? p : p?.source ?? "").includes(name));
+  const plan = position("pi-plan-mode");
+  const permission = position("pi-ask-permission");
+  if (plan > permission && permission >= 0) {
+    console.log(
+      `  warning: ${target("settings.json")} lists pi-ask-permission before pi-plan-mode;` +
+        " move pi-plan-mode above it so plan mode blocks edits before you're asked about them",
+    );
   }
 }
 
