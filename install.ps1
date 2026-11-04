@@ -4,8 +4,8 @@
 #   powershell -ExecutionPolicy Bypass -File install.ps1 -Dir $HOME\.pi\lemonade-pi-test  # self-contained dir
 #
 # Installs pi with its official installer when it is missing, then the pinned
-# packages in config\packages.txt and this distro. Safe to re-run: existing
-# config files are never overwritten. Afterwards start pi with `lemonade launch pi`.
+# packages in config\packages.txt and this distro, then its configuration (see
+# scripts\configure.mjs). Safe to re-run. Afterwards start pi with `lemonade launch pi`.
 param(
   # Install into a self-contained pi agent directory instead of ~\.pi\agent.
   [string]$Dir
@@ -57,55 +57,21 @@ foreach ($package in Get-Content (Join-Path $here "config\packages.txt")) {
 Write-Host "  $source"
 Invoke-Pi install $source
 
-# Copy a file into the agent directory unless the user already has one.
-function Seed($from, $to) {
-  if (Test-Path $to) {
-    Write-Host "  kept $to"
-  } else {
-    New-Item -ItemType Directory -Force -Path (Split-Path $to -Parent) | Out-Null
-    Copy-Item $from $to
-    Write-Host "  wrote $to"
-  }
+# Where pi keeps this package: a local source is used in place; git sources are
+# cloned to <agent-dir>\git\<host>\<path>, without the ref.
+if ($source -match '^(git:|https?://)') {
+  $repo = ($source -replace '^git:', '' -replace '^[a-z]+://', '' -replace '@.*$', '' -replace '\.git$', '')
+  $packageDir = Join-Path $agentDir "git\$repo"
+} else {
+  $packageDir = (Resolve-Path $source).Path
 }
 
-# shift+tab cycles permission modes, as in Claude Code, so pi's thinking-level
-# cycle moves to alt+t. An existing keybindings.json gets that one entry merged
-# in, unless the user already chose a key for it.
-function Set-ThinkingCycleKey {
-  $file = Join-Path $agentDir "keybindings.json"
-  if (-not (Test-Path $file)) {
-    Seed (Join-Path $here "config\keybindings.json") $file
-    return
-  }
-  try {
-    $bindings = Get-Content $file -Raw | ConvertFrom-Json
-  } catch {
-    Write-Host "  kept $file (not valid JSON); add `"app.thinking.cycle`": `"alt+t`" so shift+tab can cycle modes"
-    return
-  }
-  if ($bindings.PSObject.Properties.Name -contains "app.thinking.cycle") {
-    Write-Host "  kept $file (app.thinking.cycle is already bound)"
-  } else {
-    $bindings | Add-Member -NotePropertyName "app.thinking.cycle" -NotePropertyValue "alt+t"
-    $bindings | ConvertTo-Json -Depth 5 | Set-Content $file -Encoding UTF8
-    Write-Host "  updated ${file}: thinking-level cycle on alt+t"
-  }
-  foreach ($binding in $bindings.PSObject.Properties) {
-    if (@($binding.Value) -contains "shift+tab") {
-      Write-Host "  warning: $($binding.Name) uses shift+tab, so shift+tab won't cycle permission modes"
-    }
-  }
-}
-
-Say "Seeding configuration"
-foreach ($agent in Get-ChildItem (Join-Path $here "agents") -Filter *.md) {
-  Seed $agent.FullName (Join-Path $agentDir "agents\$($agent.Name)")
-}
-Seed (Join-Path $here "config\web-search.json") (Join-Path $agentDir "web-search.json")
-Seed (Join-Path $here "config\pi-plan-mode.json") (Join-Path $agentDir "pi-plan-mode.json")
-Seed (Join-Path $here "config\pi-harness-settings.json") (Join-Path $agentDir "extensions\pi-harness\settings.json")
-Seed (Join-Path $here "config\pi-todo-config.json") (Join-Path $agentDir "pi-todo\config.json")
-Set-ThinkingCycleKey
+# pi needs Node.js, so one is either on PATH or where pi's installer put it.
+$nodeCommand = Get-Command node -ErrorAction SilentlyContinue
+$node = if ($nodeCommand) { $nodeCommand.Source } else { Join-Path $env:LOCALAPPDATA "pi-node\current\node.exe" }
+Say "Configuring"
+& $node (Join-Path $here "scripts\configure.mjs") $agentDir $packageDir
+if ($LASTEXITCODE -ne 0) { throw "configure.mjs failed with exit code $LASTEXITCODE" }
 
 if ($env:PI_CODING_AGENT_DIR) {
   Say "Done. Start pi with:  `$env:PI_CODING_AGENT_DIR = `"$agentDir`"; lemonade launch pi"

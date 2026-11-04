@@ -6,8 +6,8 @@
 #   LEMONADE_PI_SOURCE=git:github.com/lemonade-sdk/lemonade-pi ./install.sh
 #
 # Installs pi with its official installer when it is missing, then the pinned
-# packages in config/packages.txt and this distro. Safe to re-run: existing
-# config files are never overwritten. Afterwards start pi with `lemonade launch pi`.
+# packages in config/packages.txt and this distro, then its configuration (see
+# scripts/configure.mjs). Safe to re-run. Afterwards start pi with `lemonade launch pi`.
 set -eu
 
 usage() {
@@ -77,66 +77,22 @@ done
 echo "  $source"
 "$pi" install "$source" >/dev/null
 
-# Copy a file into the agent directory unless the user already has one.
-seed() {
-  if [ -e "$2" ]; then
-    echo "  kept $2"
-  else
-    mkdir -p "$(dirname "$2")"
-    cp "$1" "$2"
-    echo "  wrote $2"
-  fi
-}
+# Where pi keeps this package: a local source is used in place; git sources are
+# cloned to <agent-dir>/git/<host>/<path>, without the ref.
+case "$source" in
+  git:* | http://* | https://*)
+    repo=${source#git:}
+    repo=${repo#*://}
+    repo=${repo%%@*}
+    package_dir="$agent_dir/git/${repo%.git}"
+    ;;
+  *) package_dir=$(cd "$source" && pwd) ;;
+esac
 
-# shift+tab cycles permission modes, as in Claude Code, so pi's thinking-level
-# cycle moves to alt+t. An existing keybindings.json gets that one entry merged
-# in, unless the user already chose a key for it.
-bind_thinking_cycle() {
-  file="$agent_dir/keybindings.json"
-  if [ ! -e "$file" ]; then
-    seed "$here/config/keybindings.json" "$file"
-    return
-  fi
-  node=$(command -v node 2>/dev/null || echo "${XDG_DATA_HOME:-$HOME/.local/share}/pi-node/current/bin/node")
-  if [ ! -x "$node" ]; then
-    echo "  kept $file; add \"app.thinking.cycle\": \"alt+t\" to it so shift+tab can cycle modes"
-    return
-  fi
-  "$node" - "$file" <<'NODE'
-const fs = require("fs");
-const file = process.argv[2];
-let bindings;
-try {
-  bindings = JSON.parse(fs.readFileSync(file, "utf8"));
-} catch (error) {
-  console.log(`  kept ${file} (not valid JSON); add "app.thinking.cycle": "alt+t" so shift+tab can cycle modes`);
-  process.exit(0);
-}
-const keys = (value) => (Array.isArray(value) ? value : [value]);
-if ("app.thinking.cycle" in bindings) {
-  console.log(`  kept ${file} (app.thinking.cycle is already bound)`);
-} else {
-  bindings["app.thinking.cycle"] = "alt+t";
-  fs.writeFileSync(file, JSON.stringify(bindings, null, 2) + "\n");
-  console.log(`  updated ${file}: thinking-level cycle on alt+t`);
-}
-for (const [action, value] of Object.entries(bindings)) {
-  if (keys(value).includes("shift+tab")) {
-    console.log(`  warning: ${action} uses shift+tab, so shift+tab won't cycle permission modes`);
-  }
-}
-NODE
-}
-
-say "Seeding configuration"
-for agent in "$here"/agents/*.md; do
-  seed "$agent" "$agent_dir/agents/$(basename "$agent")"
-done
-seed "$here/config/web-search.json" "$agent_dir/web-search.json"
-seed "$here/config/pi-plan-mode.json" "$agent_dir/pi-plan-mode.json"
-seed "$here/config/pi-harness-settings.json" "$agent_dir/extensions/pi-harness/settings.json"
-seed "$here/config/pi-todo-config.json" "$agent_dir/pi-todo/config.json"
-bind_thinking_cycle
+# pi needs Node.js, so one is either on PATH or where pi's installer put it.
+node=$(command -v node 2>/dev/null || echo "${XDG_DATA_HOME:-$HOME/.local/share}/pi-node/current/bin/node")
+say "Configuring"
+"$node" "$here/scripts/configure.mjs" "$agent_dir" "$package_dir"
 
 if [ "$agent_dir" = "$HOME/.pi/agent" ]; then
   say "Done. Start pi with:  lemonade launch pi"
