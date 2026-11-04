@@ -2,9 +2,15 @@
   "permission": {
     "mode": "manual",
     "allow": [
-      "read", "grep", "find", "ls",
-      "subagent", "web_search", "fetch_content", "todo",
-      "plan_mode_question", "plan_mode_complete"
+      "read",
+      "grep",
+      "find",
+      "ls",
+      "web_search",
+      "fetch_content",
+      "todo",
+      "plan_mode_question",
+      "plan_mode_complete"
     ]
   }
 }

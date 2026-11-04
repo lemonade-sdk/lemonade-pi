@@ -50,8 +50,30 @@ for (const agent of fs.readdirSync(path.join(here, "agents")).filter((f) => f.en
 seed(config("web-search.json"), target("web-search.json"));
 seed(config("pi-plan-mode.json"), target("pi-plan-mode.json"));
 seed(config("pi-todo-config.json"), target("pi-todo", "config.json"));
-seed(config("pi-harness-settings.json"), target("extensions", "pi-harness", "settings.json"));
+configurePermissions();
 bindThinkingCycle();
+
+// Earlier releases allowed `subagent` without a prompt, so delegated agents,
+// which run in full mode, could act unapproved. A file still holding exactly
+// that old default list is moved to the new one; any other list is the user's.
+function configurePermissions() {
+  const file = target("extensions", "pi-harness", "settings.json");
+  if (!fs.existsSync(file)) {
+    seed(config("pi-harness-settings.json"), file);
+    return;
+  }
+  const current = readJson(file).value;
+  const allow = current?.permission?.allow;
+  const oldDefault = ["read", "grep", "find", "ls", "subagent", "web_search", "fetch_content", "todo",
+    "plan_mode_question", "plan_mode_complete"];
+  if (Array.isArray(allow) && allow.length === oldDefault.length && oldDefault.every((t, i) => allow[i] === t)) {
+    current.permission.allow = allow.filter((t) => t !== "subagent");
+    writeJson(file, current);
+    console.log(`  updated ${file}: delegating to a subagent now asks first`);
+  } else {
+    console.log(`  kept ${file}`);
+  }
+}
 
 // shift+tab cycles permission modes, as in Claude Code, so pi's thinking-level
 // cycle moves to alt+t. An existing keybindings.json gets that one entry merged

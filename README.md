@@ -40,9 +40,9 @@ All extensions come from their upstream authors, unmodified. This repository add
 - **`lean-prompt.ts`** replaces pi's default prompt with a short behavioral one, mentions only tools that are active, and lists your subagents.
 - **`claude-keys.ts`** makes `shift+tab` cycle modes like Claude Code: default → accept edits → plan. The thinking-level cycle moves to `alt+t` (in `keybindings.json`) and the todo toggle to `ctrl+alt+t`.
 - **`lemonade-thinking.ts`** marks Qwen3-family Lemonade models as reasoning models. pi then sends `enable_thinking` and llama.cpp's `thinking_budget_tokens`, so `off` disables thinking and each level caps it (budgets come from pi's `thinkingBudgets` setting). It steps aside once Lemonade writes `reasoning` into models.json itself.
-- **`subagent-permissions.ts`** runs headless subagent children in `full` permission mode. You approve the delegation in the parent; read-only agents are still limited by their `tools:`.
+- **`subagent-permissions.ts`** runs headless subagent children in `full` permission mode. Delegating isn't on the allow list, so in default and accept-edits modes you approve each delegation, seeing the agent and its task, in the parent. Agents are still limited by their `tools:`.
 - **Config defaults in `config/`:**
-  - the harmless tools are allowed without prompting
+  - read-only tools, web search, todos, and plan mode's own tools are allowed without prompting
   - plan mode may use read-only bash and web tools
   - web search is routed SearXNG → Brave → Tavily → Exa (free) → DuckDuckGo
 
