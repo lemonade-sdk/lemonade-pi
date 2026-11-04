@@ -33,14 +33,15 @@ interface ModelEntry {
   contextWindow?: number;
   maxTokens?: number;
   compat?: Record<string, unknown>;
+  [field: string]: unknown;
 }
 
 interface ProviderEntry {
   baseUrl?: string;
-  apiKey?: string;
   api?: string;
   compat?: Record<string, unknown>;
   models?: ModelEntry[];
+  [field: string]: unknown;
 }
 
 function readProvider(): ProviderEntry | undefined {
@@ -70,18 +71,20 @@ export default function (pi: ExtensionAPI) {
     };
   });
 
+  // Copy each entry whole so settings this extension doesn't know about, such as
+  // samplingParams or headers, survive; only reasoning and the thinking compat change.
+  const { models: _, ...providerFields } = provider;
   pi.registerProvider(PROVIDER, {
-    baseUrl: provider.baseUrl,
-    apiKey: provider.apiKey,
-    api: (provider.api ?? "openai-completions") as "openai-completions",
+    ...providerFields,
+    api: provider.api ?? "openai-completions",
     models: models.map((m) => {
       const thinks = THINKING_MODEL.test(m.id);
       return {
-        id: m.id,
+        ...m,
         name: m.name ?? m.id,
         reasoning: thinks,
         input: m.input ?? ["text"],
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        cost: (m.cost as object | undefined) ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
         // pi's defaults for models.json entries without these fields.
         contextWindow: m.contextWindow ?? 128000,
         maxTokens: m.maxTokens ?? 16384,
@@ -95,5 +98,5 @@ export default function (pi: ExtensionAPI) {
         },
       };
     }),
-  });
+  } as Parameters<ExtensionAPI["registerProvider"]>[1]);
 }
