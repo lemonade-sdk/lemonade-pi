@@ -109,6 +109,7 @@ fi
 cat <<'EOF'
 
   shift+tab           cycle mode: default -> accept edits -> plan
+  alt+m               all permission modes, including full access
   alt+t               cycle thinking level
   /plan, ctrl+alt+p   plan before editing (read-only until you approve)
   /skill:grill-me, /skill:code-review, /skill:simplify, /skill:init

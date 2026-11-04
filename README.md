@@ -41,6 +41,18 @@ It leaves `models.json`, `mcp.json`, and your default model (which `lemonade lau
 | Lean system prompt | `extensions/lean-prompt.ts` | always on |
 | Skills | `skills/` | `/skill:grill-me`, `code-review`, `simplify`, `init` |
 
+## Permission modes
+
+| Mode | What runs without asking | Key |
+|---|---|---|
+| default (`manual`) | Reads, web search, todos, and anything you've marked "always yes" | shift+tab |
+| accept edits (`edits`) | The same, plus file edits and writes | shift+tab |
+| plan | Read-only exploration until you approve a plan | shift+tab |
+| `judge` | Like accept edits; a judge model answers the routine calls (by default TypeSafe's hosted Jev, via `/login typesafe`, so it isn't local) | alt+m |
+| `full` | Everything: no permission prompts at all | alt+m |
+
+shift+tab cycles default → accept edits → plan, as in Claude Code. Full access is deliberately left out of that cycle, so a stray keypress can't turn off every prompt. Use alt+m, which cycles manual → edits → judge → full, and watch the footer for the active mode.
+
 All extensions come from their upstream authors, unmodified. This repository adds only glue:
 
 - **`lean-prompt.ts`** replaces pi's default prompt with a short behavioral one, mentions only tools that are active, and lists your subagents.
