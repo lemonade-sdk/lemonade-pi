@@ -8,6 +8,12 @@
  * - `chat_template_kwargs.enable_thinking`: off vs. on
  * - `thinking_budget_tokens`: the budget of each level (pi's `thinkingBudgets` setting)
  *
+ * "off" is sent as thinking enabled with a 0-token budget rather than
+ * `enable_thinking: false`. Toggling `enable_thinking` changes how Qwen's chat
+ * template renders the whole conversation, which throws away llama.cpp's prompt
+ * cache: on a 25k-token session, one "off" request reprocessed everything (135s
+ * instead of ~2s). A 0 budget gives the same no-reasoning answer and keeps the cache.
+ *
  * Launch rewrites models.json on every run, so this can't live there. Once
  * Lemonade writes `reasoning` itself, this extension steps aside.
  */
@@ -52,6 +58,17 @@ export default function (pi: ExtensionAPI) {
   if (!provider?.baseUrl || !models.some((m) => THINKING_MODEL.test(m.id))) return;
   // Lemonade already says which models think: leave its configuration alone.
   if (models.some((m) => m.reasoning !== undefined)) return;
+
+  const thinkingModels = new Set(models.filter((m) => THINKING_MODEL.test(m.id)).map((m) => m.id));
+  pi.on("before_provider_request", (event) => {
+    const payload = event.payload as { model?: string; chat_template_kwargs?: Record<string, unknown> };
+    if (!thinkingModels.has(payload?.model ?? "") || payload.chat_template_kwargs?.enable_thinking !== false) return;
+    return {
+      ...payload,
+      chat_template_kwargs: { ...payload.chat_template_kwargs, enable_thinking: true },
+      thinking_budget_tokens: 0,
+    };
+  });
 
   pi.registerProvider(PROVIDER, {
     baseUrl: provider.baseUrl,
