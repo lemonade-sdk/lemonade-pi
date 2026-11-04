@@ -1,0 +1,16 @@
+{
+  "searchRouting": {
+    "providers": ["searxng", "brave", "tavily", "exa", "duckduckgo"],
+    "useCurrentModel": false,
+    "fallbackOn": ["unsupported", "transient", "quota", "network", "invalid-response"]
+  },
+  "fetchRouting": { "allowRemoteHostedProviders": false },
+  "fetch": { "defaultMode": "readable", "allowedModes": ["readable", "raw"] },
+  "tools": {
+    "sourceCheck": { "enabled": false },
+    "getSearchContent": { "enabled": false }
+  },
+  "toolActivation": "eager",
+  "workflow": "none",
+  "maxInlineContentChars": 16000
+}

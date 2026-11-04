@@ -1,0 +1,158 @@
+#!/bin/sh
+# Install lemonade-pi on macOS or Linux (Windows: run install.ps1).
+#
+#   ./install.sh                         # global: ~/.pi/agent (or $PI_CODING_AGENT_DIR)
+#   ./install.sh --dir ~/.pi/lemonade-pi-test # self-contained dir, leaves your global setup alone
+#   LEMONADE_PI_SOURCE=git:github.com/lemonade-sdk/lemonade-pi ./install.sh
+#
+# Installs pi with its official installer when it is missing, then the pinned
+# packages in config/packages.txt and this distro. Safe to re-run: existing
+# config files are never overwritten. Afterwards start pi with `lemonade launch pi`.
+set -eu
+
+usage() {
+  echo "Usage: $0 [--dir <path>]"
+  echo "  --dir <path>  install into a self-contained pi agent directory instead of ~/.pi/agent"
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dir)
+      [ $# -ge 2 ] || { usage >&2; exit 1; }
+      mkdir -p "$2"
+      PI_CODING_AGENT_DIR=$(cd "$2" && pwd)
+      export PI_CODING_AGENT_DIR
+      shift 2
+      ;;
+    -h | --help) usage; exit 0 ;;
+    *) usage >&2; exit 1 ;;
+  esac
+done
+
+here=$(cd "$(dirname "$0")" && pwd)
+source=${LEMONADE_PI_SOURCE:-$here}
+agent_dir=${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}
+
+say() { printf '\033[1m%s\033[0m\n' "$*"; }
+
+fetch() {
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$1"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO- "$1"
+  else
+    echo "Neither curl nor wget is available to download $1" >&2
+    return 1
+  fi
+}
+
+# The official installer asks its questions on /dev/tty. Its stdout goes
+# through cat so it doesn't offer to start pi and take over this script.
+if ! command -v pi >/dev/null 2>&1; then
+  say "pi not found; running the official installer from https://pi.dev"
+  fetch https://pi.dev/install.sh | sh | cat
+fi
+
+# A fresh install may not be on PATH until the shell restarts.
+pi=$(command -v pi 2>/dev/null || true)
+[ -n "$pi" ] || pi="$agent_dir/bin/pi"
+if [ ! -x "$pi" ]; then
+  echo "pi is still not available. Install it from https://pi.dev, open a new shell, and run this again." >&2
+  exit 1
+fi
+
+version=$("$pi" --version 2>/dev/null | head -n1)
+case "$version" in
+  0.* | 1.[0-4] | 1.[0-4].*)
+    say "Updating pi $version (lemonade-pi needs 1.5 or newer)"
+    "$pi" update --self
+    ;;
+esac
+
+say "Installing packages into $agent_dir"
+grep -v -e '^#' -e '^[[:space:]]*$' "$here/config/packages.txt" | while IFS= read -r package; do
+  echo "  $package"
+  "$pi" install "$package" >/dev/null
+done
+echo "  $source"
+"$pi" install "$source" >/dev/null
+
+# Copy a file into the agent directory unless the user already has one.
+seed() {
+  if [ -e "$2" ]; then
+    echo "  kept $2"
+  else
+    mkdir -p "$(dirname "$2")"
+    cp "$1" "$2"
+    echo "  wrote $2"
+  fi
+}
+
+# shift+tab cycles permission modes, as in Claude Code, so pi's thinking-level
+# cycle moves to alt+t. An existing keybindings.json gets that one entry merged
+# in, unless the user already chose a key for it.
+bind_thinking_cycle() {
+  file="$agent_dir/keybindings.json"
+  if [ ! -e "$file" ]; then
+    seed "$here/config/keybindings.json" "$file"
+    return
+  fi
+  node=$(command -v node 2>/dev/null || echo "${XDG_DATA_HOME:-$HOME/.local/share}/pi-node/current/bin/node")
+  if [ ! -x "$node" ]; then
+    echo "  kept $file; add \"app.thinking.cycle\": \"alt+t\" to it so shift+tab can cycle modes"
+    return
+  fi
+  "$node" - "$file" <<'NODE'
+const fs = require("fs");
+const file = process.argv[2];
+let bindings;
+try {
+  bindings = JSON.parse(fs.readFileSync(file, "utf8"));
+} catch (error) {
+  console.log(`  kept ${file} (not valid JSON); add "app.thinking.cycle": "alt+t" so shift+tab can cycle modes`);
+  process.exit(0);
+}
+const keys = (value) => (Array.isArray(value) ? value : [value]);
+if ("app.thinking.cycle" in bindings) {
+  console.log(`  kept ${file} (app.thinking.cycle is already bound)`);
+} else {
+  bindings["app.thinking.cycle"] = "alt+t";
+  fs.writeFileSync(file, JSON.stringify(bindings, null, 2) + "\n");
+  console.log(`  updated ${file}: thinking-level cycle on alt+t`);
+}
+for (const [action, value] of Object.entries(bindings)) {
+  if (keys(value).includes("shift+tab")) {
+    console.log(`  warning: ${action} uses shift+tab, so shift+tab won't cycle permission modes`);
+  }
+}
+NODE
+}
+
+say "Seeding configuration"
+for agent in "$here"/agents/*.md; do
+  seed "$agent" "$agent_dir/agents/$(basename "$agent")"
+done
+seed "$here/config/web-search.json" "$agent_dir/web-search.json"
+seed "$here/config/pi-plan-mode.json" "$agent_dir/pi-plan-mode.json"
+seed "$here/config/pi-harness-settings.json" "$agent_dir/extensions/pi-harness/settings.json"
+seed "$here/config/pi-todo-config.json" "$agent_dir/pi-todo/config.json"
+bind_thinking_cycle
+
+if [ "$agent_dir" = "$HOME/.pi/agent" ]; then
+  say "Done. Start pi with:  lemonade launch pi"
+else
+  say "Done. Start pi with:  PI_CODING_AGENT_DIR=$agent_dir lemonade launch pi"
+fi
+cat <<'EOF'
+
+  shift+tab           cycle mode: default -> accept edits -> plan
+  alt+t               cycle thinking level
+  /plan, ctrl+alt+p   plan before editing (read-only until you approve)
+  /skill:grill-me, /skill:code-review, /skill:simplify, /skill:init
+
+  Web search works without a key. For better results set one of
+  SEARXNG_BASE_URL, BRAVE_API_KEY, or TAVILY_API_KEY.
+EOF
+if ! command -v pi >/dev/null 2>&1; then
+  printf '\n  pi was just installed: open a new shell so it is on your PATH.\n'
+fi

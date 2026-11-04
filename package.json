@@ -1,0 +1,32 @@
+{
+  "name": "lemonade-pi",
+  "version": "0.1.0",
+  "description": "Lemonade flavored pi: an opinionated pi distro for local models.",
+  "keywords": [
+    "pi-package"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "files": [
+    "agents",
+    "extensions",
+    "skills",
+    "config",
+    "install.sh",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions/lean-prompt.ts",
+      "./extensions/subagent-permissions.ts",
+      "./extensions/lemonade-thinking.ts",
+      "./extensions/claude-keys.ts"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  }
+}

@@ -1,0 +1,4 @@
+{
+  "defaultPlanTools": ["read", "bash", "web_search", "fetch_content", "todo"],
+  "toggleShortcut": "ctrl+alt+p"
+}

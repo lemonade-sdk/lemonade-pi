@@ -1,0 +1,8 @@
+# Upstream pi packages, pinned to the versions this distro was tested with.
+# Order matters: pi runs tool_call hooks in load order, and plan mode must
+# block an edit before the permission gate asks about it.
+npm:@narumitw/pi-plan-mode@0.59.6
+npm:@adeildo/pi-ask-permission@6.0.0
+npm:pi-lite-subagent@0.2.2
+npm:pi-web-access@0.46.0
+npm:pi-todo-lite@0.3.0
