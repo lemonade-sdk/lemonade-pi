@@ -20,7 +20,13 @@ To try it without touching your global `~/.pi/agent`, install into a self-contai
 PI_CODING_AGENT_DIR=~/.pi/lemonade-pi-test lemonade launch pi
 ```
 
-If pi isn't installed, the installer runs pi's official installer first. It then runs `pi install` for each package below, pinned to tested versions. It seeds config files only where none exist, and it leaves `models.json`, `mcp.json`, and your default model (which `lemonade launch pi` manages) alone.
+If pi isn't installed, the installer runs pi's official installer first. It then runs `pi install` for each package below, pinned to tested versions. It writes config files only where none exist, with three small edits to files you already have:
+
+- **`keybindings.json`:** adds `"app.thinking.cycle": "alt+t"`, which frees shift+tab for the mode cycle, unless you've already bound that action.
+- **pi-ask-permission's `folders.json`:** gets this package's folder as read-only, so loading a skill doesn't prompt.
+- **Permission allow list:** if it still matches an earlier lemonade-pi default, it's updated to the current one.
+
+It leaves `models.json`, `mcp.json`, and your default model (which `lemonade launch pi` manages) alone.
 
 ## What you get
 
