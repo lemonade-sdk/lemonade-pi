@@ -107,7 +107,7 @@ if ($env:PI_CODING_AGENT_DIR) {
 }
 Write-Host @"
 
-  shift+tab           cycle mode: default -> accept edits -> plan
+  shift+tab           cycle mode: ask first -> accept edits -> plan (-> full access)
   alt+m               all permission modes, including full access
   alt+t               cycle thinking level
   /plan, ctrl+alt+p   plan before editing (read-only until you approve)

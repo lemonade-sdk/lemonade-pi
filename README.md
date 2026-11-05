@@ -58,14 +58,14 @@ New sessions start in the mode you chose at install: `full` or ask first (`manua
 | accept edits (`edits`) | The same, plus file edits and writes | shift+tab |
 | plan | Read-only exploration until you approve a plan | shift+tab |
 | `judge` | Like accept edits; a judge model answers the routine calls (by default TypeSafe's hosted Jev, via `/login typesafe`, so it isn't local) | alt+m |
-| `full` | Everything: no permission prompts at all | alt+m |
+| `full` | Everything: no permission prompts at all | shift+tab if it's your starting mode, else alt+m |
 
-shift+tab cycles default → accept edits → plan, as in Claude Code. Full access is deliberately left out of that cycle, so a stray keypress can't turn off every prompt. Use alt+m, which cycles manual → edits → judge → full, and watch the footer for the active mode.
+shift+tab cycles ask first → accept edits → plan, as in Claude Code. If sessions start with full access, `full` joins the end of that cycle, as bypass mode does in Claude Code when you launch with it; otherwise it stays off shift+tab, so a stray keypress can't turn off every prompt. Plans run in your starting mode, so finishing one returns you there. alt+m reaches every mode (manual → edits → judge → full); the footer shows the active one.
 
 All extensions come from their upstream authors, unmodified. This repository adds only glue:
 
 - **`lean-prompt.ts`** replaces pi's default prompt with a short behavioral one, mentions only tools that are active, and lists your subagents.
-- **`claude-keys.ts`** makes `shift+tab` cycle modes like Claude Code: default → accept edits → plan. The thinking-level cycle moves to `alt+t` (in `keybindings.json`) and the todo toggle to `ctrl+alt+t`.
+- **`claude-keys.ts`** makes `shift+tab` cycle modes like Claude Code: ask first → accept edits → plan, then full access if that's your starting mode. The thinking-level cycle moves to `alt+t` (in `keybindings.json`) and the todo toggle to `ctrl+alt+t`.
 - **`lemonade-thinking.ts`** marks Qwen3-family Lemonade models as reasoning models. pi then sends `enable_thinking` and llama.cpp's `thinking_budget_tokens`, so `off` disables thinking and each level caps it (budgets come from pi's `thinkingBudgets` setting). It steps aside once Lemonade writes `reasoning` into models.json itself.
 - **`subagent-permissions.ts`** runs headless subagent children in `full` permission mode. Delegating isn't on the allow list, so in default and accept-edits modes you approve each delegation, seeing the agent and its task, in the parent. Agents are still limited by their `tools:`.
 - **Config defaults in `config/`:**
