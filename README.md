@@ -20,11 +20,18 @@ To try it without touching your global `~/.pi/agent`, install into a self-contai
 PI_CODING_AGENT_DIR=~/.pi/lemonade-pi-test lemonade launch pi
 ```
 
+The installer asks how new sessions should handle permissions:
+
+- **Full access** (pi's default, preselected): edits and commands run without asking.
+- **Ask first** (Claude Code's default): you approve edits and commands.
+
+Pass `--permissions full` or `--permissions ask` (`-Permissions` on Windows) to skip the question. Without a terminal to ask on, it picks full access. Re-running keeps your choice unless you pass the flag. Either way the permission extension stays installed, so you can switch at any time.
+
 If pi isn't installed, the installer runs pi's official installer first. It then runs `pi install` for each package below, pinned to tested versions. It writes config files only where none exist, with three small edits to files you already have:
 
 - **`keybindings.json`:** adds `"app.thinking.cycle": "alt+t"`, which frees shift+tab for the mode cycle, unless you've already bound that action.
 - **pi-ask-permission's `folders.json`:** gets this package's folder as read-only, so loading a skill doesn't prompt.
-- **Permission allow list:** if it still matches an earlier lemonade-pi default, it's updated to the current one.
+- **Permission settings:** the allow list is updated if it still matches an earlier lemonade-pi default, and the starting mode changes only when you pass `--permissions`.
 
 It leaves `models.json`, `mcp.json`, and your default model (which `lemonade launch pi` manages) alone.
 
@@ -43,9 +50,11 @@ It leaves `models.json`, `mcp.json`, and your default model (which `lemonade lau
 
 ## Permission modes
 
+New sessions start in the mode you chose at install: `full` or ask first (`manual`). To change it later, re-run the installer with `--permissions`, or set `permission.mode` in `~/.pi/agent/extensions/pi-harness/settings.json`.
+
 | Mode | What runs without asking | Key |
 |---|---|---|
-| default (`manual`) | Reads, web search, todos, and anything you've marked "always yes" | shift+tab |
+| ask first (`manual`) | Reads, web search, todos, and anything you've marked "always yes" | shift+tab |
 | accept edits (`edits`) | The same, plus file edits and writes | shift+tab |
 | plan | Read-only exploration until you approve a plan | shift+tab |
 | `judge` | Like accept edits; a judge model answers the routine calls (by default TypeSafe's hosted Jev, via `/login typesafe`, so it isn't local) | alt+m |

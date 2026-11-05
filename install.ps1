@@ -2,13 +2,17 @@
 #
 #   powershell -ExecutionPolicy Bypass -File install.ps1                             # global: ~\.pi\agent
 #   powershell -ExecutionPolicy Bypass -File install.ps1 -Dir $HOME\.pi\lemonade-pi-test  # self-contained dir
+#   powershell -ExecutionPolicy Bypass -File install.ps1 -Permissions ask  # start sessions asking first
 #
 # Installs pi with its official installer when it is missing, then the pinned
 # packages in config\packages.txt and this distro, then its configuration (see
 # scripts\configure.mjs). Safe to re-run. Afterwards start pi with `lemonade launch pi`.
 param(
   # Install into a self-contained pi agent directory instead of ~\.pi\agent.
-  [string]$Dir
+  [string]$Dir,
+  # How new sessions handle permissions: full (no prompts, pi's default) or ask (Claude Code's default).
+  [ValidateSet("full", "ask")]
+  [string]$Permissions
 )
 $ErrorActionPreference = "Stop"
 
@@ -22,6 +26,23 @@ $source = if ($env:LEMONADE_PI_SOURCE) { $env:LEMONADE_PI_SOURCE } else { $here 
 $agentDir = if ($env:PI_CODING_AGENT_DIR) { $env:PI_CODING_AGENT_DIR } else { Join-Path $HOME ".pi\agent" }
 
 function Say($text) { Write-Host $text -ForegroundColor White }
+
+# Ask how new sessions should start, before the slow part. A re-run keeps the
+# existing choice unless -Permissions is given.
+$mode = switch ($Permissions) { "full" { "full" } "ask" { "manual" } default { "" } }
+if (-not $mode -and -not (Test-Path (Join-Path $agentDir "extensions\pi-harness\settings.json"))) {
+  if ([Environment]::UserInteractive -and -not [Console]::IsInputRedirected) {
+    Write-Host "How should new pi sessions handle permissions?"
+    Write-Host "  1) Full access: run edits and commands without asking (pi's default)"
+    Write-Host "  2) Ask first: approve edits and commands, as in Claude Code"
+    Write-Host "You can switch any time with shift+tab or alt+m."
+    $answer = Read-Host "Choose [1]"
+    $mode = if ($answer -like "2*") { "manual" } else { "full" }
+  } else {
+    $mode = "full"
+    Write-Host "No terminal to ask on: sessions start with full access. Re-run with -Permissions ask to change that."
+  }
+}
 
 # Run a pi command and stop on failure; native commands don't throw on their own.
 function Invoke-Pi {
@@ -74,7 +95,9 @@ if ($source -match '^(git:|https?://)') {
 $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
 $node = if ($nodeCommand) { $nodeCommand.Source } else { Join-Path $env:LOCALAPPDATA "pi-node\current\node.exe" }
 Say "Configuring"
-& $node (Join-Path $here "scripts\configure.mjs") $agentDir $packageDir
+$configureArgs = @((Join-Path $here "scripts\configure.mjs"), $agentDir, $packageDir)
+if ($mode) { $configureArgs += $mode }
+& $node @configureArgs
 if ($LASTEXITCODE -ne 0) { throw "configure.mjs failed with exit code $LASTEXITCODE" }
 
 if ($env:PI_CODING_AGENT_DIR) {

@@ -3,6 +3,7 @@
 #
 #   ./install.sh                         # global: ~/.pi/agent (or $PI_CODING_AGENT_DIR)
 #   ./install.sh --dir ~/.pi/lemonade-pi-test # self-contained dir, leaves your global setup alone
+#   ./install.sh --permissions ask       # start sessions asking first instead of with full access
 #   LEMONADE_PI_SOURCE=git:github.com/lemonade-sdk/lemonade-pi ./install.sh
 #
 # Installs pi with its official installer when it is missing, then the pinned
@@ -11,11 +12,14 @@
 set -eu
 
 usage() {
-  echo "Usage: $0 [--dir <path>]"
-  echo "  --dir <path>  install into a self-contained pi agent directory instead of ~/.pi/agent"
+  echo "Usage: $0 [--dir <path>] [--permissions full|ask]"
+  echo "  --dir <path>          install into a self-contained pi agent directory instead of ~/.pi/agent"
+  echo "  --permissions full    new sessions run tools without asking (pi's default)"
+  echo "  --permissions ask     new sessions ask before edits and commands (Claude Code's default)"
 }
 
 own_dir=
+mode=
 while [ $# -gt 0 ]; do
   case "$1" in
     --dir)
@@ -24,6 +28,14 @@ while [ $# -gt 0 ]; do
       PI_CODING_AGENT_DIR=$(cd "$2" && pwd)
       export PI_CODING_AGENT_DIR
       own_dir=1
+      shift 2
+      ;;
+    --permissions)
+      case "${2:-}" in
+        full) mode=full ;;
+        ask) mode=manual ;;
+        *) usage >&2; exit 1 ;;
+      esac
       shift 2
       ;;
     -h | --help) usage; exit 0 ;;
@@ -36,6 +48,28 @@ source=${LEMONADE_PI_SOURCE:-$here}
 agent_dir=${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}
 
 say() { printf '\033[1m%s\033[0m\n' "$*"; }
+
+# Ask how new sessions should start, before the slow part. A re-run keeps the
+# existing choice unless --permissions is given.
+if [ -z "$mode" ] && [ ! -e "$agent_dir/extensions/pi-harness/settings.json" ]; then
+  if ( : </dev/tty ) 2>/dev/null; then
+    {
+      echo "How should new pi sessions handle permissions?"
+      echo "  1) Full access: run edits and commands without asking (pi's default)"
+      echo "  2) Ask first: approve edits and commands, as in Claude Code"
+      echo "You can switch any time with shift+tab or alt+m."
+      printf 'Choose [1]: '
+    } >/dev/tty
+    IFS= read -r answer </dev/tty || answer=
+    case "$answer" in
+      2*) mode=manual ;;
+      *) mode=full ;;
+    esac
+  else
+    mode=full
+    echo "No terminal to ask on: sessions start with full access. Re-run with --permissions ask to change that."
+  fi
+fi
 
 fetch() {
   if command -v curl >/dev/null 2>&1; then
@@ -99,7 +133,7 @@ esac
 # pi needs Node.js, so one is either on PATH or where pi's installer put it.
 node=$(command -v node 2>/dev/null || echo "${XDG_DATA_HOME:-$HOME/.local/share}/pi-node/current/bin/node")
 say "Configuring"
-"$node" "$here/scripts/configure.mjs" "$agent_dir" "$package_dir"
+"$node" "$here/scripts/configure.mjs" "$agent_dir" "$package_dir" $mode
 
 if [ "$agent_dir" = "$HOME/.pi/agent" ]; then
   say "Done. Start pi with:  lemonade launch pi"

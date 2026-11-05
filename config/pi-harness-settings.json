@@ -1,6 +1,6 @@
 {
   "permission": {
-    "mode": "manual",
+    "mode": "full",
     "allow": [
       "read",
       "grep",

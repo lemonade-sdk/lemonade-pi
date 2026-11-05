@@ -1,7 +1,11 @@
 // Write lemonade-pi's configuration into a pi agent directory. Run by install.sh
 // and install.ps1 after the packages are installed:
 //
-//   node scripts/configure.mjs <agent-dir> <package-dir>
+//   node scripts/configure.mjs <agent-dir> <package-dir> [full|manual]
+//
+// The optional mode is the permission mode new sessions start in: full (no
+// prompts, pi's default) or manual (ask first, Claude Code's default). Without
+// it a new install gets full and an existing install keeps its mode.
 //
 // Files are only created where none exist. The few edits to existing files are
 // targeted merges that leave the user's other settings alone.
@@ -10,9 +14,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const [agentDir, packageDir] = process.argv.slice(2);
-if (!agentDir || !packageDir) {
-  console.error("usage: node configure.mjs <agent-dir> <package-dir>");
+const [agentDir, packageDir, permissionMode] = process.argv.slice(2);
+if (!agentDir || !packageDir || (permissionMode && !["full", "manual"].includes(permissionMode))) {
+  console.error("usage: node configure.mjs <agent-dir> <package-dir> [full|manual]");
   process.exit(1);
 }
 const here = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -55,26 +59,49 @@ allowSkillReads();
 bindThinkingCycle();
 checkPackageOrder();
 
+// Sets the mode new sessions start in: the one chosen at install, else full for a
+// new install, else whatever the user has. pi-ask-permission stays installed
+// either way, so shift+tab, alt+m, and its settings screen can switch later.
+//
 // Earlier releases allowed `subagent` without a prompt, so delegated agents,
 // which run in full mode, could act unapproved. A file still holding exactly
 // that old default list is moved to the new one; any other list is the user's.
 function configurePermissions() {
   const file = target("extensions", "pi-harness", "settings.json");
   if (!fs.existsSync(file)) {
-    seed(config("pi-harness-settings.json"), file);
+    const settings = readJson(config("pi-harness-settings.json")).value;
+    settings.permission.mode = permissionMode ?? "full";
+    writeJson(file, settings);
+    console.log(`  wrote ${file}: new sessions start in ${describeMode(settings.permission.mode)}`);
     return;
   }
   const current = readJson(file).value;
-  const allow = current?.permission?.allow;
+  if (!current?.permission) {
+    console.log(`  kept ${file}`);
+    return;
+  }
+  const changes = [];
+  const allow = current.permission.allow;
   const oldDefault = ["read", "grep", "find", "ls", "subagent", "web_search", "fetch_content", "todo",
     "plan_mode_question", "plan_mode_complete"];
   if (Array.isArray(allow) && allow.length === oldDefault.length && oldDefault.every((t, i) => allow[i] === t)) {
     current.permission.allow = allow.filter((t) => t !== "subagent");
+    changes.push("delegating to a subagent now asks first");
+  }
+  if (permissionMode && current.permission.mode !== permissionMode) {
+    current.permission.mode = permissionMode;
+    changes.push(`new sessions start in ${describeMode(permissionMode)}`);
+  }
+  if (changes.length > 0) {
     writeJson(file, current);
-    console.log(`  updated ${file}: delegating to a subagent now asks first`);
+    console.log(`  updated ${file}: ${changes.join("; ")}`);
   } else {
     console.log(`  kept ${file}`);
   }
+}
+
+function describeMode(mode) {
+  return mode === "full" ? "full access (no permission prompts)" : `${mode} mode (asks first)`;
 }
 
 // The model reads skills from this package's folder, which is outside any
