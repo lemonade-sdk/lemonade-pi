@@ -27,13 +27,15 @@ The installer asks how new sessions should handle permissions:
 
 Pass `--permissions full` or `--permissions ask` (`-Permissions` on Windows) to skip the question. Without a terminal to ask on, it picks full access. Re-running keeps your choice unless you pass the flag. Either way the permission extension stays installed, so you can switch at any time.
 
-If pi isn't installed, the installer runs pi's official installer first. It then runs `pi install` for each package below, pinned to tested versions. It writes config files only where none exist, with three small edits to files you already have:
+If pi isn't installed, the installer runs pi's official installer first. It then runs `pi install` for each package below, pinned to tested versions. It copies lemonade-pi's extensions and skills to `~/.pi/agent/lemonade-pi` and installs them from there, so you can delete the clone afterwards. To update, pull and re-run the installer. It writes config files only where none exist, with three small edits to files you already have:
 
 - **`keybindings.json`:** adds `"app.thinking.cycle": "alt+t"`, which frees shift+tab for the mode cycle, unless you've already bound that action.
-- **pi-ask-permission's `folders.json`:** gets this package's folder as read-only, so loading a skill doesn't prompt.
+- **pi-ask-permission's `folders.json`:** gets the package folder as read-only, so loading a skill doesn't prompt.
 - **Permission settings:** the allow list is updated if it still matches an earlier lemonade-pi default, and the starting mode changes only when you pass `--permissions`.
 
 It leaves `models.json`, `mcp.json`, and your default model (which `lemonade launch pi` manages) alone.
+
+When working on lemonade-pi itself, install with `--dev` (`-Dev` on Windows): pi then loads the extensions and skills from the clone, so your edits apply in the next session without re-installing. Re-running without it goes back to the copy.
 
 ## What you get
 

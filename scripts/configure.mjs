@@ -55,6 +55,7 @@ seed(config("web-search.json"), target("web-search.json"));
 seed(config("pi-plan-mode.json"), target("pi-plan-mode.json"));
 seed(config("pi-todo-config.json"), target("pi-todo", "config.json"));
 configurePermissions();
+removeOldInstalls();
 allowSkillReads();
 bindThinkingCycle();
 checkPackageOrder();
@@ -104,8 +105,36 @@ function describeMode(mode) {
   return mode === "full" ? "full access (no permission prompts)" : `${mode} mode (asks first)`;
 }
 
+// Earlier releases loaded lemonade-pi from the clone the installer ran in, and
+// --dev still does. Any other copy pi still lists would load every extension
+// twice, or point at a folder that's gone, so it's dropped from settings.json.
+function removeOldInstalls() {
+  const file = target("settings.json");
+  const settings = readJson(file).value;
+  if (!Array.isArray(settings?.packages)) return;
+  const packages = settings.packages.filter((p) => {
+    const source = typeof p === "string" ? p : p?.source;
+    if (typeof source !== "string" || !isLocal(source) || !isOldInstall(path.resolve(agentDir, source))) return true;
+    console.log(`  updated ${file}: removed ${source}, an earlier install of lemonade-pi`);
+    return false;
+  });
+  if (packages.length !== settings.packages.length) writeJson(file, { ...settings, packages });
+}
+
+function isLocal(source) {
+  return !/^(npm:|git:|[a-z]+:\/\/)/i.test(source);
+}
+
+/** A lemonade-pi folder other than this install's, or a missing one by that name. */
+function isOldInstall(dir) {
+  if (samePath(dir, packageDir)) return false;
+  const name = readJson(path.join(dir, "package.json")).value?.name;
+  return name === "lemonade-pi" || (!fs.existsSync(dir) && path.basename(dir) === "lemonade-pi");
+}
+
 // The model reads skills from this package's folder, which is outside any
 // workspace, so pi-ask-permission would ask before every skill it loads.
+// Folders of earlier installs are dropped.
 function allowSkillReads() {
   const file = target("extensions", "pi-ask-permission", "folders.json");
   const { value, invalid } = readJson(file);
@@ -114,12 +143,16 @@ function allowSkillReads() {
     return;
   }
   const folders = value ?? { read: [], write: [] };
-  folders.read = Array.isArray(folders.read) ? folders.read : [];
-  if (folders.read.some((dir) => path.resolve(dir.replace(/^~(?=$|[\\/])/, home())) === path.resolve(packageDir))) {
+  const resolve = (dir) => path.resolve(dir.replace(/^~(?=$|[\\/])/, home()));
+  const before = Array.isArray(folders.read) ? folders.read : [];
+  const read = before.filter((dir) => !isOldInstall(resolve(dir)));
+  const removed = before.length - read.length;
+  const found = read.some((dir) => samePath(resolve(dir), packageDir));
+  if (found && removed === 0) {
     console.log(`  kept ${file}`);
     return;
   }
-  folders.read.push(packageDir);
+  folders.read = found ? read : [...read, packageDir];
   writeJson(file, folders);
   console.log(`  ${value ? "updated" : "wrote"} ${file}: skills can be read without asking`);
 }
@@ -167,6 +200,11 @@ function checkPackageOrder() {
         " move pi-plan-mode above it so plan mode blocks edits before you're asked about them",
     );
   }
+}
+
+function samePath(a, b) {
+  const [x, y] = [path.resolve(a), path.resolve(b)];
+  return process.platform === "win32" ? x.toLowerCase() === y.toLowerCase() : x === y;
 }
 
 function home() {

@@ -4,22 +4,27 @@
 #   ./install.sh                         # global: ~/.pi/agent (or $PI_CODING_AGENT_DIR)
 #   ./install.sh --dir ~/.pi/lemonade-pi-test # self-contained dir, leaves your global setup alone
 #   ./install.sh --permissions ask       # start sessions asking first instead of with full access
+#   ./install.sh --dev                   # load extensions and skills from this clone, for working on them
 #   LEMONADE_PI_SOURCE=git:github.com/lemonade-sdk/lemonade-pi ./install.sh
 #
 # Installs pi with its official installer when it is missing, then the pinned
 # packages in config/packages.txt and this distro, then its configuration (see
-# scripts/configure.mjs). Safe to re-run. Afterwards start pi with `lemonade launch pi`.
+# scripts/configure.mjs). The distro is copied into the agent directory, so this
+# clone can be deleted afterwards. Safe to re-run. Afterwards start pi with
+# `lemonade launch pi`.
 set -eu
 
 usage() {
-  echo "Usage: $0 [--dir <path>] [--permissions full|ask]"
+  echo "Usage: $0 [--dir <path>] [--permissions full|ask] [--dev]"
   echo "  --dir <path>          install into a self-contained pi agent directory instead of ~/.pi/agent"
   echo "  --permissions full    new sessions run tools without asking (pi's default)"
   echo "  --permissions ask     new sessions ask before edits and commands (Claude Code's default)"
+  echo "  --dev                 load extensions and skills from this clone instead of a copy"
 }
 
 own_dir=
 mode=
+dev=
 while [ $# -gt 0 ]; do
   case "$1" in
     --dir)
@@ -38,6 +43,7 @@ while [ $# -gt 0 ]; do
       esac
       shift 2
       ;;
+    --dev) dev=1; shift ;;
     -h | --help) usage; exit 0 ;;
     *) usage >&2; exit 1 ;;
   esac
@@ -115,11 +121,12 @@ grep -v -e '^#' -e '^[[:space:]]*$' "$here/config/packages.txt" | while IFS= rea
   echo "  $package"
   "$pi" install "$package" >/dev/null
 done
-echo "  $source"
-"$pi" install "$source" >/dev/null
 
-# Where pi keeps this package: a local source is used in place; git sources are
-# cloned to <agent-dir>/git/<host>/<path>, without the ref.
+# Where pi keeps this package. git sources are cloned to
+# <agent-dir>/git/<host>/<path>, without the ref. pi loads a local source in
+# place, so it's copied into the agent directory first, unless --dev asks for
+# the source itself.
+copy_dir="$agent_dir/lemonade-pi"
 case "$source" in
   git:* | http://* | https://*)
     repo=${source#git:}
@@ -127,8 +134,28 @@ case "$source" in
     repo=${repo%%@*}
     package_dir="$agent_dir/git/${repo%.git}"
     ;;
-  *) package_dir=$(cd "$source" && pwd) ;;
+  *)
+    package_dir=$(cd "$source" && pwd)
+    if [ -z "$dev" ] && [ "$package_dir" != "$copy_dir" ]; then
+      rm -rf "$copy_dir"
+      mkdir -p "$copy_dir"
+      for file in package.json extensions skills LICENSE THIRD_PARTY_NOTICES.md; do
+        cp -R "$package_dir/$file" "$copy_dir/"
+      done
+      package_dir=$copy_dir
+    fi
+    source=$package_dir
+    ;;
 esac
+
+# --dev leaves the copy unused. configure.mjs drops it, and any other earlier
+# install of this distro, from pi's settings.
+if [ -n "$dev" ] && [ "$package_dir" != "$copy_dir" ]; then
+  rm -rf "$copy_dir"
+fi
+
+echo "  $source"
+"$pi" install "$source" >/dev/null
 
 # pi needs Node.js, so one is either on PATH or where pi's installer put it.
 node=$(command -v node 2>/dev/null || echo "${XDG_DATA_HOME:-$HOME/.local/share}/pi-node/current/bin/node")

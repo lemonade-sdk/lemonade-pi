@@ -3,16 +3,21 @@
 #   powershell -ExecutionPolicy Bypass -File install.ps1                             # global: ~\.pi\agent
 #   powershell -ExecutionPolicy Bypass -File install.ps1 -Dir $HOME\.pi\lemonade-pi-test  # self-contained dir
 #   powershell -ExecutionPolicy Bypass -File install.ps1 -Permissions ask  # start sessions asking first
+#   powershell -ExecutionPolicy Bypass -File install.ps1 -Dev              # load extensions and skills from this clone
 #
 # Installs pi with its official installer when it is missing, then the pinned
 # packages in config\packages.txt and this distro, then its configuration (see
-# scripts\configure.mjs). Safe to re-run. Afterwards start pi with `lemonade launch pi`.
+# scripts\configure.mjs). The distro is copied into the agent directory, so this
+# clone can be deleted afterwards. Safe to re-run. Afterwards start pi with
+# `lemonade launch pi`.
 param(
   # Install into a self-contained pi agent directory instead of ~\.pi\agent.
   [string]$Dir,
   # How new sessions handle permissions: full (no prompts, pi's default) or ask (Claude Code's default).
   [ValidateSet("full", "ask")]
-  [string]$Permissions
+  [string]$Permissions,
+  # Load extensions and skills from this clone instead of a copy, for working on them.
+  [switch]$Dev
 )
 $ErrorActionPreference = "Stop"
 
@@ -79,17 +84,34 @@ foreach ($package in Get-Content (Join-Path $here "config\packages.txt")) {
   Write-Host "  $package"
   Invoke-Pi install $package
 }
-Write-Host "  $source"
-Invoke-Pi install $source
 
-# Where pi keeps this package: a local source is used in place; git sources are
-# cloned to <agent-dir>\git\<host>\<path>, without the ref.
+# Where pi keeps this package. git sources are cloned to
+# <agent-dir>\git\<host>\<path>, without the ref. pi loads a local source in
+# place, so it's copied into the agent directory first, unless -Dev asks for
+# the source itself.
+$copyDir = Join-Path $agentDir "lemonade-pi"
 if ($source -match '^(git:|https?://)') {
   $repo = ($source -replace '^git:', '' -replace '^[a-z]+://', '' -replace '@.*$', '' -replace '\.git$', '')
   $packageDir = Join-Path $agentDir "git\$repo"
 } else {
   $packageDir = (Resolve-Path $source).Path
+  if (-not $Dev -and $packageDir -ne $copyDir) {
+    if (Test-Path $copyDir) { Remove-Item -Recurse -Force $copyDir }
+    New-Item -ItemType Directory -Force -Path $copyDir | Out-Null
+    foreach ($file in "package.json", "extensions", "skills", "LICENSE", "THIRD_PARTY_NOTICES.md") {
+      Copy-Item -Recurse (Join-Path $packageDir $file) $copyDir
+    }
+    $packageDir = $copyDir
+  }
+  $source = $packageDir
 }
+
+# -Dev leaves the copy unused. configure.mjs drops it, and any other earlier
+# install of this distro, from pi's settings.
+if ($Dev -and $packageDir -ne $copyDir -and (Test-Path $copyDir)) { Remove-Item -Recurse -Force $copyDir }
+
+Write-Host "  $source"
+Invoke-Pi install $source
 
 # pi needs Node.js, so one is either on PATH or where pi's installer put it.
 $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
